@@ -1,3 +1,3 @@
-# This repository is for DucDiff.
+# This repository is for the paper __DucDiff: Dual-consistent Diffusion for Uncertainty-aware Information Diffusion Prediction__.
 
-We have given the main implementation code. 
+
