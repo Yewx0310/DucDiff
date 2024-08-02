@@ -4,7 +4,7 @@ This repository is for the paper _DucDiff: Dual-consistent Diffusion for Uncerta
 
 - data: contains the example data
 
-- run.py: main files for training and testing models
+- run.py: main file for training and testing models
 
 
 
