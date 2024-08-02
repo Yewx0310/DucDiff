@@ -5,9 +5,9 @@ import numpy as np
 import torch.nn as nn
 
 
-class DiffCas(nn.Module):
+class DucDiff(nn.Module):
     def __init__(self, args):
-        super(DiffCas, self).__init__()
+        super(DucDiff, self).__init__()
         self.user_size = args.user_size
         self.hidden_size = args.hidden_size
         self.att_head = args.att_head
