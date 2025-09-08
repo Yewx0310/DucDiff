@@ -1,19 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="ChangeListManager">
-    <list default="true" id="4d62f5e6-37ad-4ffb-bcda-729ac2d02fc3" name="更改" comment="">
-      <change beforePath="$PROJECT_DIR$/Metrics.py" beforeDir="false" afterPath="$PROJECT_DIR$/Metrics.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/TransformerBlock.py" beforeDir="false" afterPath="$PROJECT_DIR$/TransformerBlock.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/beta_schedule.py" beforeDir="false" afterPath="$PROJECT_DIR$/beta_schedule.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/data/christianity/cascades.txt" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/dataLoader.py" beforeDir="false" afterPath="$PROJECT_DIR$/dataLoader.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/model.py" beforeDir="false" afterPath="$PROJECT_DIR$/model.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/parsers.py" beforeDir="false" afterPath="$PROJECT_DIR$/parsers.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/run.py" beforeDir="false" afterPath="$PROJECT_DIR$/run.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/step_sampler.py" beforeDir="false" afterPath="$PROJECT_DIR$/step_sampler.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/utils.py" beforeDir="false" afterPath="$PROJECT_DIR$/utils.py" afterDir="false" />
-    </list>
+    <list default="true" id="4d62f5e6-37ad-4ffb-bcda-729ac2d02fc3" name="更改" comment="" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -64,6 +52,7 @@
       <updated>1757337126781</updated>
       <workItem from="1757337128421" duration="79000" />
       <workItem from="1757337217933" duration="155000" />
+      <workItem from="1757337617392" duration="140000" />
     </task>
     <servers />
   </component>
