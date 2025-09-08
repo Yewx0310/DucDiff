@@ -1,21 +1,32 @@
 # -*- coding: utf-8 -*-
+
+import time
 import datetime
 import numpy as np
 import Constants
 import torch
 from torch.nn.functional import kl_div
+# from tqdm import tqdm
+import torch.optim as optim
 from torch.utils.data import DataLoader
 from dataLoader import datasets, Read_data, Split_data
 from parsers import parser
 from utils import EarlyStopping
 from Metrics import Metrics
-from model import DiffCas
+from model import DucDiff
+
+import torch.autograd as autograd
 
 import warnings
+# 忽略特定警告
 warnings.filterwarnings("ignore", category=UserWarning, module="torch.nn._reduction")
+
+import os
+# os.environ["WANDB_MODE"] = "offline"
 
 metric = Metrics()
 opt = parser.parse_args()
+
 
 def trans_to_cuda(variable):
     if torch.cuda.is_available():
@@ -24,7 +35,7 @@ def trans_to_cuda(variable):
         return variable
 
 
-def init_seeds(seed=2024):
+def init_seeds(seed=2023):
     torch.manual_seed(seed)
     torch.cuda.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
@@ -39,7 +50,6 @@ def get_performance(crit, pred, gold):
     n_correct = pred.data.eq(gold.data)
     n_correct = n_correct.masked_select(gold.ne(Constants.PAD).data).sum().float()
     return loss, n_correct
-
 
 def get_correct(pred, gold):
     pred = pred.max(1)[1]
@@ -57,23 +67,27 @@ def model_training(model, train_loader, epoch):
     n_total_correct = 0.0
 
     print('start training: ', datetime.datetime.now())
+    # training
     model.train()
 
-    for step, (cascade_item, label, cascades_fru, cascade_time, label_time, cascade_len) in enumerate(train_loader):
+    for step, (cascade_item, label, cascades_fur, cascade_time, label_time, cascade_len) in enumerate(train_loader):
         n_words = label.data.ne(Constants.PAD).sum().float().item()
         n_total_words += n_words
         model.zero_grad()
         cascade_item = trans_to_cuda(cascade_item.long())
         tar = trans_to_cuda(label.long())
+        cascades_fur = trans_to_cuda(cascades_fur.long())
+        cascade_time = trans_to_cuda(cascade_time.long())
+        label_time = trans_to_cuda(label_time.long())
 
-        past_output_noib_mask, past_output_noib, future_output_noib, past_output_ib, future_output_ib = model(cascade_item, tar)
+        past_output_noib_mask, future_output_noib_mask, past_output_noib, future_output_noib, past_output_ib, future_output_ib = model(cascade_item, tar)
         
         tar = tar.contiguous().view(-1)
         cascade_item = cascade_item.contiguous().view(-1)
 
         ce_loss = 0.7 * model.loss_ce(past_output_noib_mask, tar) + \
-                  0.3 * model.loss_ce(future_output_noib, cascade_item)
-
+                    0.3 * model.loss_ce(future_output_noib_mask, cascade_item)
+        
         vcd_loss = 0.5 * kl_div(input=model.softmax(past_output_noib.detach()),
                                 target=model.softmax(future_output_ib),reduction="sum") + \
                 0.5 * kl_div(input=model.softmax(future_output_noib.detach()),
@@ -82,10 +96,11 @@ def model_training(model, train_loader, epoch):
         loss = ce_loss + 0.3 * vcd_loss
         n_correct = get_correct(past_output_noib, tar)
 
+        total_loss += loss.item()
+
         loss.backward()
         model.optimizer.step()
         model.optimizer.update_learning_rate()
-        total_loss += loss.item()
         n_total_correct += n_correct
 
     print('\tTotal Loss:\t%.3f' % total_loss)
@@ -107,9 +122,11 @@ def model_testing(model, test_loader, k_list=[10, 50, 100]):
     model.eval()
 
     with torch.no_grad():
-        for step, (cascade_item, label, cascades_fru, cascade_time, label_time, cascade_len) in enumerate(test_loader):
+        for step, (cascade_item, label, cascades_fur, cascade_time, label_time, cascade_len) in enumerate(test_loader):
 
             cascade_item = trans_to_cuda(cascade_item.long())
+            cascade_time = trans_to_cuda(cascade_time.long())
+
             y_pred = model.model_prediction(cascade_item)
 
             y_pred = y_pred.detach().cpu()
@@ -145,26 +162,34 @@ def train_test(epoch, model, train_loader, val_loader, test_loader):
 def main(data_path):
     init_seeds(opt.seed)
 
+    # ========= Preparing DataLoader =========#
+    #### Divide training set, validation set and test set
     if opt.preprocess:
         Split_data(data_path, train_rate=opt.train_rate, valid_rate=opt.valid_rate, load_dict=True)
 
+    #### Read training set, validation set and test set
     train, valid, test, user_size = Read_data(data_path)
 
     train_data = datasets(train, opt.max_len)
     val_data = datasets(valid, opt.max_len)
     test_data = datasets(test, opt.max_len)
 
+    #### Build DataLoader
     train_loader = DataLoader(dataset=train_data, batch_size=opt.batch_size, shuffle=True, num_workers=8)
     val_loader = DataLoader(dataset=val_data, batch_size=opt.batch_size, shuffle=False, num_workers=8)
     test_loader = DataLoader(dataset=test_data, batch_size=opt.batch_size, shuffle=False, num_workers=8)
 
+    # ========= Preparing graph and hypergraph =========#
     opt.user_size = user_size
 
+    # ========= Early_stopping =========#
     save_model_path = opt.save_path
     early_stopping = EarlyStopping(patience=opt.patience, verbose=True, path=save_model_path)
 
-    model = trans_to_cuda(DiffCas(opt))
+    # ========= Building Model =========#
+    model = trans_to_cuda(DucDiff(opt))
 
+    # ========= Metrics =========#
     top_K = [10, 50, 100]
     best_results = {}
     for K in top_K:
@@ -200,11 +225,13 @@ def main(data_path):
                 print('train_loss:\t%.4f\tRecall@%d: %.4f\tMAP@%d: %.4f\tEpoch: %d,  %d' %
                       (total_loss, K, best_results['metric%d' % K][0], K, best_results['metric%d' % K][1],
                        best_results['epoch%d' % K][0], best_results['epoch%d' % K][1]))
+                
         early_stopping(-sum(list(val_scores.values())), model)
         if early_stopping.early_stop:
             print("Early_Stopping")
             break
 
+    # ========= Final score =========#
     print(" -(Finished!!) \n parameter settings: ")
     print("--------------------------------------------")
     print(opt)
@@ -218,7 +245,8 @@ def main(data_path):
 
 
 if __name__ == "__main__":
-    opt.save_path = f"./checkpoint/{opt.data_name}/lr_{opt.lr}_batch_{opt.batch_size}_step_{opt.steps}_emb_{opt.hidden_size}.pt"
+    opt.save_path = f"./checkpoint/{opt.data_name}/lr_{opt.lr}_batch_{opt.batch_size}_step_{opt.steps}_emb_{opt.hidden_size}_case_study.pt"
     opt.compress_emb = int(opt.hidden_size * 0.75)
     print(opt)
+    
     main(opt.data_name)

@@ -14,6 +14,7 @@ def MultileayerModule(module, N):
 
 class MultiHeadedAttention(nn.Module):
     def __init__(self, h, d_model, dropout=0.1):
+        """ Take in model size and numbe of heads """
         super(MultiHeadedAttention, self).__init__()
         assert d_model % h == 0
         self.d_k = d_model // h
@@ -32,11 +33,11 @@ class MultiHeadedAttention(nn.Module):
             mask = mask.unsqueeze(1)
         nbatches = query.size(0)
 
-
+        # h x d_k
         query, key, value = [l(x).view(nbatches, -1, self.h, self.d_k).transpose(1, 2)
                              for l, x in zip(self.linears, (query, key, value))]
         x, self.attn = self.attention(query, key, value, dropout=self.dropout)
-
+        # concat
         x = x.transpose(1, 2).contiguous().view(nbatches, -1, self.h * self.d_k)
         outputs = self.linears[-1](x)
         outputs = torch.squeeze(outputs)
@@ -56,10 +57,11 @@ class MultiHeadedAttention(nn.Module):
 class PositionalEncoding(nn.Module):
     "Implement the PE function."
 
-    def __init__(self, d_model, dropout, max_len=5000):
+    def __init__(self, d_model, dropout, max_len=10000):
         super(PositionalEncoding, self).__init__()
         self.dropout = nn.Dropout(p=dropout)
 
+        # Compute the positional encodings once in log space.
         pe = torch.zeros(max_len, d_model)
         position = torch.arange(0, max_len).unsqueeze(1).float()
         div_term = torch.exp(torch.arange(0, d_model, 2).float() * -(math.log(10000.0) / d_model))
@@ -112,6 +114,14 @@ class TransformerBlock(nn.Module):
         return output
 
     def scaled_dot_product_attention(self, Q, K, V, mask, episilon=1e-6):
+        '''
+        :param Q: (*, max_q_words, n_heads, input_size)
+        :param K: (*, max_k_words, n_heads, input_size)
+        :param V: (*, max_v_words, n_heads, input_size)
+        :param mask: (*, max_q_words)
+        :param episilon:
+        :return:
+        '''
         temperature = self.d_k ** 0.5
         Q_K = torch.einsum("bqd,bkd->bqk", Q, K) / (temperature + episilon)
         if mask is not None:
@@ -123,13 +133,20 @@ class TransformerBlock(nn.Module):
             mask_ = mask + pad_mask
             Q_K = Q_K.masked_fill(mask_, -2 ** 32 + 1)
 
-        Q_K_score = F.softmax(Q_K, dim=-1)
+        Q_K_score = F.softmax(Q_K, dim=-1)  # (batch_size, max_q_words, max_k_words)
         Q_K_score_new = self.dropout(Q_K_score)
-
-        V_att = Q_K_score_new.bmm(V)
+        # 维度为3的两个矩阵的乘法
+        V_att = Q_K_score_new.bmm(V)  # (*, max_q_words, input_size)
         return V_att, Q_K_score
 
     def multi_head_attention(self, Q, K, V, mask):
+        '''
+        :param Q:
+        :param K:
+        :param V:
+        :param mask: (bsz, max_q_words)
+        :return:
+        '''
         bsz, q_len, _ = Q.size()
         bsz, k_len, _ = K.size()
         bsz, v_len, _ = V.size()
@@ -143,38 +160,36 @@ class TransformerBlock(nn.Module):
         V_ = V_.permute(0, 2, 1, 3).contiguous().view(bsz * self.n_heads, q_len, self.d_v)
 
         if mask is not None:
-            mask = mask.unsqueeze(dim=1).expand(-1, self.n_heads, -1)
+            mask = mask.unsqueeze(dim=1).expand(-1, self.n_heads, -1)  # For head axis broadcasting.
             mask = mask.reshape(-1, mask.size(-1))
 
         V_att, att_score = self.scaled_dot_product_attention(Q_, K_, V_, mask)
         V_att = V_att.view(bsz, self.n_heads, q_len, self.d_v)
         V_att = V_att.permute(0, 2, 1, 3).contiguous().view(bsz, q_len, self.n_heads * self.d_v)
 
-        output = self.dropout(V_att.matmul(self.W_o))
+        output = self.dropout(V_att.matmul(self.W_o))  # (batch_size, max_q_words, input_size)
         return output, att_score
 
     def forward(self, Q, K, V, mask=None):
+        '''
+        :param Q: (batch_size, max_q_words, input_size)
+        :param K: (batch_size, max_k_words, input_size)
+        :param V: (batch_size, max_v_words, input_size)
+        :return:  output: (batch_size, max_q_words, input_size)  same size as Q
+        '''
         V_att, kl_att = self.multi_head_attention(Q, K, V, mask)
 
         if self.is_layer_norm:
-            X = self.layer_norm(Q + V_att)
+            X = self.layer_norm(Q + V_att)  # (batch_size, max_r_words, embedding_dim)
             output = self.layer_norm(self.FFN(X) + X)
+
+        # if self.is_layer_norm:
+        #     X = Q + self.layer_norm(V_att)  # (batch_size, max_r_words, embedding_dim)
+        #     output = self.FFN(self.layer_norm(X)) + X
         else:
             X = Q + V_att
             output = self.FFN(X) + X
         return output, kl_att
 
 
-class LayerNorm(nn.Module):
-    def __init__(self, hidden_size, eps=1e-12):
-        super(LayerNorm, self).__init__()
-        self.weight = nn.Parameter(torch.ones(hidden_size))
-        self.bias = nn.Parameter(torch.zeros(hidden_size))
-        self.variance_epsilon = eps
-
-    def forward(self, x):
-        u = x.mean(-1, keepdim=True)
-        s = (x - u).pow(2).mean(-1, keepdim=True)
-        x = (x - u) / torch.sqrt(s + self.variance_epsilon)
-        return self.weight * x + self.bias
 

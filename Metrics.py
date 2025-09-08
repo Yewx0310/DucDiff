@@ -1,3 +1,4 @@
+
 import numpy as np
 
 
@@ -8,6 +9,23 @@ class Metrics(object):
 		self.PAD = 0
 
 	def apk(self, actual, predicted, k=10):
+		"""
+		Computes the average precision at k.
+		This function computes the average prescision at k between two lists of
+		items.
+		Parameters
+		----------
+		actual : list
+				 A list of elements that are to be predicted (order doesn't matter)
+		predicted : list
+					A list of predicted elements (order does matter)
+		k : int, optional
+			The maximum number of predicted elements
+		Returns
+		-------
+		score : double
+				The average precision at k over the input lists
+		"""
 		score = 0.0
 		num_hits = 0.0
 
@@ -15,10 +33,17 @@ class Metrics(object):
 			if p in actual and p not in predicted[:i]:
 				num_hits += 1.0
 				score += num_hits / (i + 1.0)
+
+		# if not actual:
+		# 	return 0.0
 		return score / min(len(actual), k)
 
-	def compute_metric(self, y_prob, y_true, k_list=[10, 50, 100]):
 
+	def compute_metric(self, y_prob, y_true, k_list=[10, 50, 100]):
+		'''
+			y_true: (#samples, )
+			y_pred: (#samples, #users)
+		'''
 		scores_len = 0
 		y_prob = np.array(y_prob)
 		y_true = np.array(y_true)

@@ -1,4 +1,8 @@
+import math
+import random
 import numpy as np
+import torch
+from torch.autograd import Variable
 import Constants
 import pickle
 from torch.utils.data import Dataset
@@ -11,14 +15,18 @@ class Options(object):
         self.idx2u_dict = 'data/' + data_name + '/idx2u.pickle'
         self.net_data = 'data/' + data_name + '/edges.txt'
 
+        # train file path.
         self.train_data = 'data/' + data_name + '/cascadetrain.txt'
+        # valid file path.
         self.valid_data = 'data/' + data_name + '/cascadevalid.txt'
+        # test file path.
         self.test_data = 'data/' + data_name + '/cascadetest.txt'
 
 def _readFromFile(filename, with_EOS):
     t_cascades = []
     timestamps = []
 
+    ####process the raw data
     for line in open(filename):
         if len(line.strip()) == 0:
             continue
@@ -51,6 +59,8 @@ def Read_data(data_name, with_EOS=True):
     '''user size'''
     with open(options.u2idx_dict, 'rb') as handle:
         u2idx = pickle.load(handle)
+    # with open(options.idx2u_dict, 'rb') as handle:
+    #     idx2u = pickle.load(handle)
     user_size = len(u2idx)
 
     '''load train data, validation data and test data'''
@@ -123,7 +133,7 @@ def Split_data(data_name, train_rate=0.8, valid_rate=0.1, load_dict=False):
 
     t_cascades = []
     timestamps = []
-
+    ####process the raw data
     for line in open(options.data):
         if len(line.strip()) == 0:
             continue
@@ -133,8 +143,10 @@ def Split_data(data_name, train_rate=0.8, valid_rate=0.1, load_dict=False):
         chunks = line.strip().strip(',').split(',')
         for chunk in chunks:
             try:
+                # Twitter, Douban, weibo22
                 if len(chunk.split()) == 2:
                     user, timestamp = chunk.split()
+                # Android,Christianity
                 elif len(chunk.split()) == 3:
                     root, user, timestamp = chunk.split()
 
@@ -153,17 +165,22 @@ def Split_data(data_name, train_rate=0.8, valid_rate=0.1, load_dict=False):
     order = [i[0] for i in sorted(enumerate(timestamps), key=lambda x: x[1])]
     timestamps = sorted(timestamps)
     t_cascades[:] = [t_cascades[i] for i in order]
+    # cas_idx = [i for i in range(len(t_cascades))]
+
     '''data split'''
     train_idx_ = int(train_rate * len(t_cascades))
     train = t_cascades[0:train_idx_]
     train_t = timestamps[0:train_idx_]
+    # train_idx = cas_idx[0:train_idx_]
 
     valid_idx_ = int((train_rate + valid_rate) * len(t_cascades))
     valid = t_cascades[train_idx_:valid_idx_]
     valid_t = timestamps[train_idx_:valid_idx_]
+    # valid_idx = cas_idx[train_idx_:valid_idx_]
 
     test = t_cascades[valid_idx_:]
     test_t = timestamps[valid_idx_:]
+    # test_idx = cas_idx[valid_idx_:]
 
     '''empty folder'''
     with open(options.train_data, 'w') as file:
@@ -174,6 +191,7 @@ def Split_data(data_name, train_rate=0.8, valid_rate=0.1, load_dict=False):
         for i in range(len(train)):
             data = list(zip(train[i], train_t[i]))
             data_lst0 = [','.join(map(str, x)) for x in data]
+            # data = str(train_idx[i]) + ' ' + ' '.join(data_lst0)
             data = ' '.join(data_lst0)
             f.writelines(data + "\n")
 
@@ -185,6 +203,7 @@ def Split_data(data_name, train_rate=0.8, valid_rate=0.1, load_dict=False):
         for i in range(len(valid)):
             data = list(zip(valid[i], valid_t[i]))
             data_lst0 = [','.join(map(str, x)) for x in data]
+            # data = str(valid_idx[i]) + ' ' + ' '.join(data_lst0)
             data = ' '.join(data_lst0)
             f.writelines(data + "\n")
 
@@ -196,6 +215,7 @@ def Split_data(data_name, train_rate=0.8, valid_rate=0.1, load_dict=False):
         for i in range(len(test)):
             data = list(zip(test[i], test_t[i]))
             data_lst0 = [','.join(map(str, x)) for x in data]
+            # data = str(test_idx[i]) + ' ' + ' '.join(data_lst0)
             data = ' '.join(data_lst0)
             f.writelines(data + "\n")
 
@@ -210,6 +230,7 @@ def Split_data(data_name, train_rate=0.8, valid_rate=0.1, load_dict=False):
     print('minimum length:%f' % (min(len(cas) for cas in t_cascades)))
     print("user size:%d" % (user_size - 2))
 
+    # return user_size, t_cascades, timestamps
 
 def Read_all_cascade(data_name, with_EOS=False):
 
@@ -271,3 +292,6 @@ class datasets(Dataset):
             cascade_len = np.array(cascade_len -1)
 
         return cascades[:-1], cascades[1:], cascades_fru[:-1],  cascades_time[:-1], cascades_time[1:], cascade_len
+
+if __name__=="__main__":
+    Split_data("christianity", train_rate=0.8, valid_rate=0.1, load_dict=True)
