@@ -55,7 +55,6 @@ DucDiff
 └── Constants.py:
 └── dataLoader.py:     # Data loading.
 └── run.py:            # Run the model.
-└── Optim.py:          # Optimization.
 ...
 ```
 
